@@ -1,7 +1,7 @@
 name: "is74 Streams"
 slug: "is74_streams"
 description: "Вход в личный кабинет Интерсвязи (old-stream.is74.ru) и выдача ссылок на потоки камер для go2rtc"
-version: "0.0.2"
+version: "0.0.3"
 image: "ghcr.io/antonditto/is74-streams-{arch}"
 init: false
 arch:
