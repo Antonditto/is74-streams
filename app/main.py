@@ -73,6 +73,14 @@ def _ctx(request: Request, **extra) -> dict:
     return {"base_path": request.scope.get("root_path", ""), **extra}
 
 
+def _redirect(request: Request, path: str, status_code: int = 307) -> RedirectResponse:
+    """RedirectResponse с учётом root_path — иначе под HA Ingress Location уходит мимо
+    префикса /api/hassio_ingress/<token>/ и браузер попадает не в аддон, а куда-то в HA
+    (см. ProxyAwareMiddleware)."""
+    base_path = request.scope.get("root_path", "")
+    return RedirectResponse(f"{base_path}{path}", status_code=status_code)
+
+
 def _internal_base_url(request: Request) -> str:
     """base_url для /api/streams (go2rtc/Frigate — на том же хосте, что и этот сервис).
 
@@ -104,13 +112,13 @@ _pending_login: dict = {}
 
 
 @app.get("/")
-async def index():
+async def index(request: Request):
     state = storage.load_state()
     if not state.get("token"):
-        return RedirectResponse("/login")
+        return _redirect(request, "/login")
     if not state.get("camera_ids"):
-        return RedirectResponse("/settings")
-    return RedirectResponse("/streams")
+        return _redirect(request, "/settings")
+    return _redirect(request, "/streams")
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -132,13 +140,13 @@ async def login_submit(request: Request, phone: str = Form(...)):
 
     _pending_login["phone"] = phone
     _pending_login["unique_device_id"] = unique_device_id
-    return RedirectResponse("/confirm", status_code=303)
+    return _redirect(request, "/confirm", status_code=303)
 
 
 @app.get("/confirm", response_class=HTMLResponse)
 async def confirm_form(request: Request):
     if "phone" not in _pending_login:
-        return RedirectResponse("/login")
+        return _redirect(request, "/login")
     return templates.TemplateResponse(
         request, "confirm.html", _ctx(request, phone=_pending_login["phone"], error=None)
     )
@@ -149,7 +157,7 @@ async def confirm_submit(request: Request, code: str = Form(...)):
     phone = _pending_login.get("phone")
     unique_device_id = _pending_login.get("unique_device_id")
     if not phone or not unique_device_id:
-        return RedirectResponse("/login")
+        return _redirect(request, "/login")
 
     try:
         confirm_resp = await is74_client.confirm(phone, code)
@@ -179,14 +187,14 @@ async def confirm_submit(request: Request, code: str = Form(...)):
     })
     storage.save_state(state)
     _pending_login.clear()
-    return RedirectResponse("/settings", status_code=303)
+    return _redirect(request, "/settings", status_code=303)
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_form(request: Request):
     state = storage.load_state()
     if not state.get("token"):
-        return RedirectResponse("/login")
+        return _redirect(request, "/login")
     camera_ids = state.get("camera_ids", [])
 
     error = None
@@ -219,11 +227,11 @@ async def settings_form(request: Request):
 async def settings_submit(request: Request, camera_ids: str = Form(""), logout: str = Form(None)):
     if logout:
         storage.clear_state()
-        return RedirectResponse("/login", status_code=303)
+        return _redirect(request, "/login", status_code=303)
 
     state = storage.load_state()
     if not state.get("token"):
-        return RedirectResponse("/login")
+        return _redirect(request, "/login")
 
     try:
         # принимаем и "71069, 71070", и вставленный как есть из localStorage массив "[71069,71070]"
@@ -238,7 +246,7 @@ async def settings_submit(request: Request, camera_ids: str = Form(""), logout: 
 
     state["camera_ids"] = parsed_ids
     storage.save_state(state)
-    return RedirectResponse("/streams", status_code=303)
+    return _redirect(request, "/streams", status_code=303)
 
 
 @app.get("/api/my-groups")
@@ -338,9 +346,9 @@ async def _fetch_streams(base_url: str) -> list[dict]:
 async def streams_page(request: Request):
     state = storage.load_state()
     if not state.get("token"):
-        return RedirectResponse("/login")
+        return _redirect(request, "/login")
     if not state.get("camera_ids"):
-        return RedirectResponse("/settings")
+        return _redirect(request, "/settings")
 
     try:
         streams = await _fetch_streams(str(request.base_url))
