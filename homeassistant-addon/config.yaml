@@ -1,0 +1,24 @@
+name: "is74 Streams"
+slug: "is74_streams"
+description: "Вход в личный кабинет Интерсвязи (old-stream.is74.ru) и выдача ссылок на потоки камер для go2rtc"
+version: "0.0.1"
+init: false
+arch:
+  - aarch64
+  - amd64
+  - armv7
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8090
+panel_icon: mdi:cctv
+panel_title: "Is74 Streams"
+ports:
+  8090/tcp: 8090
+ports_description:
+  8090/tcp: "Веб-интерфейс (вход, настройки, список потоков) — напрямую, без Ingress"
+webui: "http://[HOST]:[PORT:8090]/"
+options:
+  internal_base_url: ""
+schema:
+  internal_base_url: "str?"

@@ -1,0 +1,31 @@
+{
+  "name": "is74-streams-dev",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "runArgs": ["--name=is74-streams-dev"],
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
+    },
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+  },
+  "mounts": [
+    "source=is74-streams-claude-home,target=/home/vscode/.claude,type=volume"
+  ],
+  "postCreateCommand": "pip install --user pyyaml",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "ms-python.python"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}

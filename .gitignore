@@ -1,0 +1,29 @@
+# --- Секреты и персональные данные (см. раздел "Секреты" в CLAUDE.md) ---
+.env
+.env.*
+
+# Персистентное состояние сервиса (токен Интерсвязи, ID камер) — локальный
+# аналог /data, которое HA Supervisor монтирует в контейнер add-on'а.
+data/
+
+# HAR-дампы браузера — реальный токен, телефон, адреса камер соседей
+*.har
+
+# --- Обычный шум ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+*.log
+
+# --- IDE / OS ---
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# --- Claude Code (конфиг и история сессий не должны улетать в репозиторий) ---
+.claude/
+# Разовый бэкап ~/.claude при миграции на именованный docker-volume (см. .devcontainer/devcontainer.json)
+.claude-backup/

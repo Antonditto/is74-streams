@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Вход — is74-streams{% endblock %}
+{% block topbar %}{% endblock %}
+
+{% block body %}
+<main class="wrap narrow">
+  <a class="brand" href="{{ base_path }}/" style="margin-bottom:22px">
+    <span class="brand-mark" aria-hidden="true">
+      <svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-logo"></use></svg>
+    </span>
+    <span>is74-streams<small>Камеры Интерсвязи</small></span>
+  </a>
+
+  <div class="card card-pad">
+    <div class="page-head" style="margin-bottom:14px">
+      <h1>Вход</h1>
+      <span class="count">шаг 1 из 2</span>
+    </div>
+
+    {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+    <form method="post" action="{{ base_path }}/login">
+      <div class="field">
+        <label for="phone">Номер телефона</label>
+        <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+               placeholder="9XXXXXXXXX" required autofocus>
+      </div>
+      <p class="hint">10 цифр без +7. На него придёт код подтверждения из приложения Интерсвязи.</p>
+      <div class="field">
+        <button class="btn primary block" type="submit">Получить код</button>
+      </div>
+    </form>
+  </div>
+
+  <p class="footer-note">Локальный сервис в домашней сети · данные не покидают устройство</p>
+</main>
+{% endblock %}

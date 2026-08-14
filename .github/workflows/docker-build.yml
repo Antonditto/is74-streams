@@ -1,0 +1,39 @@
+name: Docker build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f homeassistant-addon/Dockerfile -t is74-streams:ci .
+
+      - name: Smoke test (container starts, /login responds)
+        run: |
+          mkdir -p /tmp/is74-data
+          docker run -d --name is74-streams-ci -p 8090:8090 -v /tmp/is74-data:/data is74-streams:ci
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost:8090/login -o /dev/null; then
+              echo "service responded"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "service did not respond in time"
+          docker logs is74-streams-ci
+          exit 1
+
+      - name: Container logs (always, for debugging)
+        if: always()
+        run: docker logs is74-streams-ci || true
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f is74-streams-ci || true

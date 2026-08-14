@@ -1,0 +1,23 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: homeassistant-addon/Dockerfile
+    container_name: is74-streams
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    ports:
+      - "8090:8090"
+    # go2rtc в этот docker-compose не входит — он отдельный HA add-on в
+    # инфраструктуре пользователя и сам забирает ссылки из GET /api/streams
+    # этого сервиса.
+    #
+    # За Traefik ссылки на потоки в /streams и /api/streams подстраиваются сами —
+    # по заголовкам X-Forwarded-Proto/X-Forwarded-Host, которые Traefik шлёт на
+    # обычном роутинге без доп. настройки (см. CLAUDE.md, "Работа за Traefik / HA Ingress").
+    #
+    # environment:
+    #   # Если go2rtc/Frigate стоят на этом же хосте — можно задать им отдельный,
+    #   # внутренний base_url для /api/streams (не завязанный на Traefik-домен).
+    #   - IS74_INTERNAL_BASE_URL=http://is74-streams:8090/

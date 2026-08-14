@@ -1,0 +1,541 @@
+{% extends "base.html" %}
+{% set page = "settings" %}
+{% block title %}Настройки — is74-streams{% endblock %}
+
+{% block body %}
+<main class="wrap" style="max-width:820px">
+  <div class="page-head">
+    <h1>Настройки</h1>
+  </div>
+
+  {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+  <!-- Блок А — мои группы (get-group). Группы привязаны к аккаунту Интерсвязью заранее,
+       это не пользовательские плейлисты — их нельзя создать/переименовать отсюда. -->
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Мои группы</h2>
+        <p>Папки личного кабинета — «Свои камеры», привязанные к аккаунту группы и городские камеры.</p>
+      </div>
+    </div>
+    <div class="card-pad stack">
+      <div class="group-nav" id="group-nav" style="display:none">
+        <button class="btn sm" type="button" id="group-back-btn">
+          <svg class="ico" aria-hidden="true" style="transform:scaleX(-1)"><use href="{{ base_path }}/static/icons.svg#ic-chevron"></use></svg>Назад
+        </button>
+        <div id="group-chain"></div>
+      </div>
+      <div id="group-results"></div>
+      <div id="group-cameras"></div>
+      <div class="row">
+        <button class="btn primary" type="button" id="group-add-btn" style="display:none">Добавить выбранные</button>
+      </div>
+      <div class="row" id="add-all-row">
+        <button class="btn" type="button" id="group-add-all-btn">
+          <svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-check"></use></svg>Добавить все доступные камеры
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Блок Б — мои камеры: превью, перетаскивание для порядка, удаление -->
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Мои камеры</h2>
+        <p>Порядок карточек = порядок на странице «Камеры». Перетащите, чтобы поменять местами.</p>
+      </div>
+      <button class="btn sm danger ghost" type="button" id="cam-clear-btn" style="margin-left:auto">
+        <svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-close"></use></svg>Удалить все
+      </button>
+    </div>
+    <form method="post" action="{{ base_path }}/settings" class="card-pad">
+      <ul id="cam-list" class="cam-list"></ul>
+      <div id="cam-loading" class="cam-loading" style="display:none">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Загружаем превью…</span>
+      </div>
+
+      <div class="row" style="margin-top:14px">
+        <div class="input-icon">
+          <svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-grid"></use></svg>
+          <input id="manual-add-input" type="text" placeholder="Добавить ID вручную: 123456, 234567 или [123456,234567]" autocomplete="off">
+        </div>
+        <button class="btn" type="button" id="manual-add-btn">Добавить</button>
+      </div>
+      <p class="hint">Сюда же годится вставить значение ключа <code>SELECTED_CAM_IDS&lt;номер&gt;</code>
+        из <code>localStorage</code> личного кабинета (DevTools → Application) — квадратные скобки не мешают.</p>
+
+      <input type="hidden" id="camera-ids-input" name="camera_ids" value="{{ camera_ids }}">
+      <div class="row end" style="margin-top:16px">
+        <button class="btn primary" type="submit">Сохранить</button>
+      </div>
+    </form>
+  </section>
+
+  <form method="post" action="{{ base_path }}/settings" class="row end" style="margin-top:18px">
+    <input type="hidden" name="logout" value="1">
+    <button class="btn danger quiet" type="submit"><svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-logout"></use></svg>Выйти</button>
+  </form>
+</main>
+
+<script type="application/json" id="cam-data">{{ cameras_json | safe }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const BP = window.BASE_PATH || '';
+    const idsInput = document.getElementById('camera-ids-input');
+    const listEl = document.getElementById('cam-list');
+    const camLoading = document.getElementById('cam-loading');
+
+    let cardData = {};  // id (string) -> {name, thumb}
+    let order = [];     // порядок id (строки), совпадает с итоговым camera_ids
+
+    try {
+      const initial = JSON.parse(document.getElementById('cam-data').textContent || '[]');
+      for (const c of initial) {
+        const id = String(c.id);
+        cardData[id] = { name: c.name, thumb: c.snapshot_url };
+        order.push(id);
+      }
+    } catch (e) {}
+
+    function renderCards() {
+      listEl.innerHTML = '';
+      if (!order.length) {
+        const empty = document.createElement('li');
+        empty.className = 'cam-empty';
+        empty.textContent = 'Камер пока нет — найдите их в разделе «Мои группы» выше или добавьте ID вручную.';
+        listEl.appendChild(empty);
+        return;
+      }
+      for (const id of order) {
+        const data = cardData[id] || { name: 'ID ' + id, thumb: null };
+        const li = document.createElement('li');
+        li.className = 'cam-card';
+        li.draggable = true;
+        li.dataset.id = id;
+
+        if (data.thumb) {
+          const img = document.createElement('img');
+          img.className = 'cam-thumb';
+          img.loading = 'lazy';
+          img.decoding = 'async';
+          img.src = data.thumb;
+          img.alt = '';
+          li.appendChild(img);
+        } else {
+          const ph = document.createElement('div');
+          ph.className = 'cam-thumb placeholder';
+          ph.innerHTML = '<svg class="ico lg" aria-hidden="true"><use href="' + BP + '/static/icons.svg#ic-camera"></use></svg>';
+
+          const retryBtn = document.createElement('button');
+          retryBtn.type = 'button';
+          retryBtn.className = 'cam-retry';
+          retryBtn.title = 'Не удалось загрузить превью — повторить';
+          retryBtn.setAttribute('aria-label', 'Повторить загрузку превью для ' + data.name);
+          retryBtn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="' + BP + '/static/icons.svg#ic-retry"></use></svg>';
+          retryBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            retryBtn.disabled = true;
+            retryBtn.classList.add('spinning');
+            try {
+              const resp = await fetch(BP + '/api/camera-preview?ids=' + encodeURIComponent(id));
+              const info = (await resp.json());
+              const item = Array.isArray(info) && info[0];
+              if (item && item.snapshot_data_uri) {
+                cardData[id] = { name: item.name || data.name, thumb: item.snapshot_data_uri };
+                renderCards();
+                syncHidden();
+              }
+            } catch (err) {
+              // не получилось — оставляем заглушку с кнопкой, можно нажать ещё раз
+            } finally {
+              retryBtn.disabled = false;
+              retryBtn.classList.remove('spinning');
+            }
+          });
+          ph.appendChild(retryBtn);
+          li.appendChild(ph);
+        }
+
+        const grip = document.createElement('span');
+        grip.className = 'cam-drag';
+        grip.setAttribute('aria-hidden', 'true');
+        grip.innerHTML = '<svg class="ico" aria-hidden="true"><use href="' + BP + '/static/icons.svg#ic-grip"></use></svg>';
+        li.appendChild(grip);
+
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'cam-remove';
+        rm.title = 'Убрать из списка';
+        rm.setAttribute('aria-label', 'Убрать ' + data.name);
+        rm.innerHTML = '<svg class="ico" aria-hidden="true"><use href="' + BP + '/static/icons.svg#ic-close"></use></svg>';
+        rm.addEventListener('click', () => {
+          order = order.filter((x) => x !== id);
+          delete cardData[id];
+          renderCards();
+          syncHidden();
+        });
+        li.appendChild(rm);
+
+        const info = document.createElement('div');
+        info.className = 'cam-info';
+        const name = document.createElement('span');
+        name.className = 'cam-name';
+        name.textContent = data.name;
+        name.title = data.name;
+        info.appendChild(name);
+        li.appendChild(info);
+
+        listEl.appendChild(li);
+      }
+    }
+
+    function syncHidden() {
+      idsInput.value = order.join(', ');
+    }
+
+    function setLoading(isLoading) {
+      camLoading.style.display = isLoading ? 'flex' : 'none';
+      groupAddBtn.disabled = isLoading;
+      groupAddAllBtn.disabled = isLoading;
+      manualBtn.disabled = isLoading;
+    }
+
+    async function addCameras(items) {
+      // Уже добавленные (с готовым фото) — пропускаем молча, не трогаем и не перезапрашиваем.
+      const toFetch = [];
+      for (const it of items) {
+        const id = String(it.id);
+        if (cardData[id] && cardData[id].thumb) continue;
+        toFetch.push({ id, name: it.name, thumb: it.thumb || null });
+      }
+      if (!toFetch.length) return;
+
+      // Уже готовые превью (например, из начального серверного рендера) добавляем сразу.
+      const ready = toFetch.filter((it) => it.thumb);
+      const needFetch = toFetch.filter((it) => !it.thumb);
+      for (const it of ready) {
+        if (!(it.id in cardData)) order.push(it.id);
+        cardData[it.id] = { name: it.name, thumb: it.thumb };
+      }
+      if (ready.length) { renderCards(); syncHidden(); }
+      if (!needFetch.length) return;
+
+      // Для только что найденных камер (не из уже сохранённого списка) у нас нет uuid,
+      // поэтому нет и снэпшота — /media/*/snapshot отдаёт только сохранённые камеры
+      // (см. main.py, _require_known_camera). Подтягиваем реальное превью отдельным
+      // эндпоинтом (сам сходит в limited-info + снэпшот и вернёт готовую картинку) и
+      // показываем карточки только когда всё уже готово — без мигания заглушками,
+      // пока идёт круговой спиннер. Отдельные камеры, для которых снэпшот всё равно не
+      // подтянулся (см. main.py — там уже есть повтор попыток), получают кнопку
+      // повторной загрузки прямо на карточке — см. renderCards().
+      setLoading(true);
+      try {
+        const resp = await fetch(BP + '/api/camera-preview?ids=' + needFetch.map((it) => it.id).join(','));
+        const data = await resp.json();
+        const byId = {};
+        if (Array.isArray(data)) for (const c of data) byId[String(c.id)] = c;
+
+        for (const it of needFetch) {
+          const info = byId[it.id];
+          if (!(it.id in cardData)) order.push(it.id);
+          cardData[it.id] = {
+            name: (info && info.name) || it.name,
+            thumb: (info && info.snapshot_data_uri) || null,
+          };
+        }
+      } catch (e) {
+        // сеть отвалилась целиком — добавляем как есть, без фото (лучше показать
+        // камеру без превью с кнопкой "повторить", чем молча её потерять)
+        for (const it of needFetch) {
+          if (!(it.id in cardData)) order.push(it.id);
+          cardData[it.id] = { name: it.name, thumb: null };
+        }
+      } finally {
+        setLoading(false);
+        renderCards();
+        syncHidden();
+      }
+    }
+
+    // --- drag-and-drop переупорядочивание ---
+    listEl.addEventListener('dragstart', (e) => {
+      const li = e.target.closest('.cam-card');
+      if (!li) return;
+      li.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', li.dataset.id); } catch (err) {}
+    });
+    listEl.addEventListener('dragend', (e) => {
+      const li = e.target.closest('.cam-card');
+      if (li) li.classList.remove('dragging');
+      order = [...listEl.querySelectorAll('.cam-card')].map((el) => el.dataset.id);
+      syncHidden();
+    });
+    listEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const dragging = listEl.querySelector('.cam-card.dragging');
+      if (!dragging) return;
+      const after = getDragAfterElement(listEl, e.clientX, e.clientY);
+      if (after == null) listEl.appendChild(dragging);
+      else listEl.insertBefore(dragging, after);
+    });
+    // Сетка в несколько колонок — курсор сравнивается с центром каждой карточки в 2D
+    // (не только по Y, как в обычном вертикальном списке), иначе перетаскивание внутри
+    // одного ряда не работает.
+    function getDragAfterElement(container, x, y) {
+      const els = [...container.querySelectorAll('.cam-card:not(.dragging)')];
+      let closest = null;
+      let closestDist = Infinity;
+      let insertAfter = false;
+      for (const child of els) {
+        const box = child.getBoundingClientRect();
+        const cx = box.left + box.width / 2;
+        const cy = box.top + box.height / 2;
+        const dist = (x - cx) ** 2 + (y - cy) ** 2;
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = child;
+          insertAfter = x > cx;
+        }
+      }
+      if (!closest) return null;
+      return insertAfter ? closest.nextElementSibling : closest;
+    }
+
+    // --- ручное добавление ID ---
+    const manualInput = document.getElementById('manual-add-input');
+    const manualBtn = document.getElementById('manual-add-btn');
+    manualBtn.addEventListener('click', () => {
+      const raw = manualInput.value.trim();
+      if (!raw) return;
+      const ids = raw.replace(/[[\]]/g, '').split(',').map((s) => s.trim()).filter(Boolean);
+      addCameras(ids.map((id) => ({ id, name: 'ID ' + id })));
+      manualInput.value = '';
+    });
+    manualInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); manualBtn.click(); }
+    });
+
+    document.getElementById('cam-clear-btn').addEventListener('click', () => {
+      if (!order.length) return;
+      if (!confirm('Убрать все камеры из списка? Изменение применится после нажатия «Сохранить».')) return;
+      order = [];
+      cardData = {};
+      renderCards();
+      syncHidden();
+    });
+
+    renderCards();
+
+    // --- мои группы (get-group) ---
+    // Группы (кроме "own") заранее привязаны к аккаунту самой Интерсвязью — не пользовательские
+    // плейлисты, создать/переименовать их отсюда нельзя, только просматривать и брать камеры.
+    const groupNavEl = document.getElementById('group-nav');
+    const groupBackBtn = document.getElementById('group-back-btn');
+    const groupChainEl = document.getElementById('group-chain');
+    const groupResultsEl = document.getElementById('group-results');
+    const groupCamerasEl = document.getElementById('group-cameras');
+    const groupAddBtn = document.getElementById('group-add-btn');
+    const groupAddAllBtn = document.getElementById('group-add-all-btn');
+    const addAllRow = document.getElementById('add-all-row');
+
+    let groupChain = [];      // [{id, name}] — хлебные крошки
+    let groupSelected = {};   // id -> name
+
+    function renderGroupChain() {
+      groupChainEl.innerHTML = '';
+      const rootBtn = document.createElement('button');
+      rootBtn.type = 'button';
+      rootBtn.textContent = 'Мои группы';
+      rootBtn.addEventListener('click', () => goToGroupLevel(0));
+      groupChainEl.appendChild(rootBtn);
+
+      groupChain.forEach((g, i) => {
+        const sep = document.createElement('span');
+        sep.className = 'sep';
+        sep.textContent = ' › ';
+        groupChainEl.appendChild(sep);
+
+        if (i === groupChain.length - 1) {
+          const cur = document.createElement('span');
+          cur.className = 'current';
+          cur.textContent = g.name;
+          groupChainEl.appendChild(cur);
+        } else {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = g.name;
+          btn.addEventListener('click', () => goToGroupLevel(i + 1));
+          groupChainEl.appendChild(btn);
+        }
+      });
+
+      groupNavEl.style.display = groupChain.length ? 'flex' : 'none';
+    }
+
+    function renderGroupList(items, isRoot) {
+      groupResultsEl.innerHTML = '';
+      groupCamerasEl.innerHTML = '';
+      groupAddBtn.style.display = 'none';
+      groupSelected = {};
+
+      if (!Array.isArray(items) || !items.length) {
+        groupResultsEl.textContent = 'Пусто';
+        return;
+      }
+
+      let subGroups = items.filter((i) => i.OBJECT === 'GROUP');
+      const cameras = items.filter((i) => i.OBJECT === 'CAMERA');
+
+      // "Улицы Онлайн" (id 16, публичное городское дерево) — первой плиткой в корне.
+      if (isRoot) {
+        subGroups = [...subGroups].sort((a, b) => (a.ID === 16 ? -1 : b.ID === 16 ? 1 : 0));
+      }
+
+      if (subGroups.length) {
+        const grid = document.createElement('div');
+        grid.className = 'group-grid';
+        for (const g of subGroups) {
+          const tile = document.createElement('button');
+          tile.type = 'button';
+          tile.className = 'group-tile';
+          tile.innerHTML = '<svg class="ico" aria-hidden="true"><use href="' + BP + '/static/icons.svg#ic-folder"></use></svg>';
+          const label = document.createElement('span');
+          label.textContent = g.NAME;
+          tile.appendChild(label);
+          tile.addEventListener('click', () => drillGroup(g));
+          grid.appendChild(tile);
+        }
+        groupResultsEl.appendChild(grid);
+      }
+
+      if (cameras.length) {
+        const selectAllBtn = document.createElement('button');
+        selectAllBtn.type = 'button';
+        selectAllBtn.className = 'btn sm';
+        selectAllBtn.style.marginBottom = '4px';
+        selectAllBtn.textContent = 'Выбрать все';
+        selectAllBtn.addEventListener('click', () => {
+          const selectAll = selectAllBtn.textContent === 'Выбрать все';
+          groupCamerasEl.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+            cb.checked = selectAll;
+            cb.dispatchEvent(new Event('change'));
+          });
+          selectAllBtn.textContent = selectAll ? 'Снять всё' : 'Выбрать все';
+        });
+        groupCamerasEl.appendChild(selectAllBtn);
+
+        for (const cam of cameras) {
+          const label = document.createElement('label');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.value = cam.ID;
+          cb.addEventListener('change', () => {
+            if (cb.checked) groupSelected[cam.ID] = cam.NAME;
+            else delete groupSelected[cam.ID];
+          });
+          label.appendChild(cb);
+          label.append(' ' + cam.NAME + ' (' + cam.ID + ')');
+          groupCamerasEl.appendChild(label);
+        }
+        groupAddBtn.style.display = '';
+      }
+    }
+
+    async function fetchAndRenderGroup(groupId) {
+      groupResultsEl.textContent = 'Загрузка…';
+      groupCamerasEl.innerHTML = '';
+      groupAddBtn.style.display = 'none';
+      const resp = await fetch(BP + '/api/group-cameras?group_id=' + encodeURIComponent(groupId));
+      const data = await resp.json();
+      if (data && data.error) {
+        groupResultsEl.textContent = 'Ошибка: ' + data.error;
+        return;
+      }
+      renderGroupList(data, false);
+    }
+
+    async function drillGroup(g) {
+      groupChain.push({ id: g.ID, name: g.NAME });
+      renderGroupChain();
+      addAllRow.style.display = 'none';
+      await fetchAndRenderGroup(g.ID);
+    }
+
+    async function loadRootGroups() {
+      groupChain = [];
+      renderGroupChain();
+      addAllRow.style.display = '';
+      groupResultsEl.textContent = 'Загрузка…';
+      groupCamerasEl.innerHTML = '';
+      groupAddBtn.style.display = 'none';
+      const resp = await fetch(BP + '/api/my-groups');
+      const data = await resp.json();
+      if (data && data.error) {
+        groupResultsEl.textContent = 'Ошибка: ' + data.error;
+        return;
+      }
+      renderGroupList(data, true);
+    }
+
+    async function goToGroupLevel(n) {
+      groupChain = groupChain.slice(0, n);
+      renderGroupChain();
+      if (!groupChain.length) {
+        addAllRow.style.display = '';
+        await loadRootGroups();
+      } else {
+        addAllRow.style.display = 'none';
+        await fetchAndRenderGroup(groupChain[groupChain.length - 1].id);
+      }
+    }
+
+    groupBackBtn.addEventListener('click', () => goToGroupLevel(groupChain.length - 1));
+
+    groupAddBtn.addEventListener('click', () => {
+      const items = Object.entries(groupSelected).map(([id, name]) => ({ id, name }));
+      if (!items.length) return;
+      addCameras(items);
+      groupCamerasEl.querySelectorAll('input[type=checkbox]').forEach((cb) => { cb.checked = false; });
+      groupSelected = {};
+    });
+
+    // "own" + все группы аккаунта, кроме публичного городского дерева "Улицы Онлайн" (id 16) —
+    // туда камеры не привязаны к аккаунту, оно ведёт в отдельный многоуровневый список городов.
+    groupAddAllBtn.addEventListener('click', async () => {
+      groupAddAllBtn.disabled = true;
+      const original = groupAddAllBtn.textContent;
+      groupAddAllBtn.textContent = 'Собираю список…';
+      try {
+        const rootResp = await fetch(BP + '/api/my-groups');
+        const root = await rootResp.json();
+        if (!Array.isArray(root)) return;
+        const groups = root.filter((g) => g.OBJECT === 'GROUP' && g.ID !== 16);
+        const collected = new Map();
+        for (const g of groups) {
+          const resp = await fetch(BP + '/api/group-cameras?group_id=' + encodeURIComponent(g.ID));
+          const items = await resp.json();
+          if (Array.isArray(items)) {
+            for (const it of items) {
+              if (it.OBJECT === 'CAMERA') collected.set(String(it.ID), it.NAME);
+            }
+          }
+        }
+        const items = [...collected.entries()].map(([id, name]) => ({ id, name }));
+        if (items.length) await addCameras(items);
+      } finally {
+        groupAddAllBtn.disabled = false;
+        groupAddAllBtn.textContent = original;
+      }
+    });
+
+    loadRootGroups();
+  })();
+</script>
+{% endblock %}

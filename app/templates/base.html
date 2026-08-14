@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru" prefix="og: http://ogp.me/ns#">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}is74-streams{% endblock %}</title>
+<link rel="stylesheet" href="{{ base_path }}/static/app.css">
+<link rel="icon" href="{{ base_path }}/static/icon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="{{ base_path }}/static/icon.png" sizes="any">
+{% block head %}{% endblock %}
+</head>
+<body>
+
+{% block topbar %}
+<header class="topbar">
+  <a class="brand" href="{{ base_path }}/">
+    <span class="brand-mark" aria-hidden="true">
+      <svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-logo"></use></svg>
+    </span>
+    <span>is74-streams<small>Камеры Интерсвязи</small></span>
+  </a>
+  <nav class="topnav">
+    {% block nav %}
+    <a href="{{ base_path }}/streams"{% if page == "streams" %} aria-current="page"{% endif %}><svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-grid"></use></svg>Камеры</a>
+    <a href="{{ base_path }}/settings"{% if page == "settings" %} aria-current="page"{% endif %}><svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-sliders"></use></svg>Настройки</a>
+    <a href="{{ base_path }}/api/streams"><svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-code"></use></svg>JSON</a>
+    {% endblock %}
+    <button type="button" data-theme-toggle title="Тема: автоматически" aria-label="Тема: автоматически — нажмите для смены"><svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-theme"></use></svg></button>
+  </nav>
+</header>
+{% endblock %}
+
+{% block body %}{% endblock %}
+
+<script>window.BASE_PATH = {{ base_path | tojson }};</script>
+<script src="{{ base_path }}/static/copy.js" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 252 64" width="504" height="128" role="img" aria-label="is74-streams">
+  <rect width="64" height="64" rx="14" fill="#1d5f7d"></rect>
+  <g fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round">
+    <circle cx="25" cy="32" r="12.5"></circle>
+    <path d="M43 22.5a15 15 0 0 1 0 19"></path>
+    <path d="M51 16.5a24 24 0 0 1 0 31"></path>
+  </g>
+  <circle cx="25" cy="32" r="4.6" fill="#fff"></circle>
+  <text x="80" y="34" fill="#1d5f7d" font-family="system-ui, -apple-system, &#39;Segoe UI&#39;, Arial, sans-serif" font-size="25" font-weight="650" letter-spacing="-0.6">is74-streams</text>
+  <text x="80" y="52" fill="#5d6b73" font-family="system-ui, -apple-system, &#39;Segoe UI&#39;, Arial, sans-serif" font-size="13.5" font-weight="450" letter-spacing="0.2">Камеры Интерсвязи</text>
+</svg>

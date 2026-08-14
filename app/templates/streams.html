@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% set page = "streams" %}
+{% block title %}Камеры — is74-streams{% endblock %}
+
+{% block body %}
+<main class="wrap">
+  <div class="page-head">
+    <h1>Камеры</h1>
+    <span class="count">{{ streams|length }} шт.</span>
+  </div>
+
+  {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+  {% if streams %}
+  <div class="grid">
+    {% for s in streams %}
+    <article class="card stream" data-stream>
+      <a class="shot" href="{{ s.hls_url }}" title="Открыть HLS-поток">
+        <img src="{{ s.snapshot_url }}" alt="Снэпшот: {{ s.name }}" loading="lazy" decoding="async">
+        <span class="badge">{{ s.slug }}</span>
+      </a>
+
+      <div class="stream-body">
+        <h2 class="stream-title">
+          <svg class="ico type" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#{{ s.icon }}"></use></svg>{{ s.name }}
+        </h2>
+        <p class="stream-addr">{{ s.address }}</p>
+      </div>
+
+      <div class="stream-actions">
+        <a class="btn primary" href="{{ s.hls_url }}"><svg class="ico" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-play"></use></svg>Открыть HLS</a>
+        <button class="btn sm" type="button" data-copy="{{ s.hls_url }}" title="Скопировать HLS-ссылку">
+          <svg class="ico ico-idle" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-copy"></use></svg>
+          <svg class="ico ico-done" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-check"></use></svg>
+          <span class="label">HLS</span>
+          <span class="copy-toast" aria-hidden="true"></span>
+        </button>
+        <button class="btn sm" type="button" data-copy="{{ s.snapshot_url }}" title="Скопировать ссылку на снэпшот">
+          <svg class="ico ico-idle" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-copy"></use></svg>
+          <svg class="ico ico-done" aria-hidden="true"><use href="{{ base_path }}/static/icons.svg#ic-check"></use></svg>
+          <span class="label">Снэпшот</span>
+          <span class="copy-toast" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="copy-fallback">
+        <input type="text" readonly value="" aria-label="Ссылка для копирования вручную">
+        <p class="hint">Буфер обмена недоступен без HTTPS — скопируйте ссылку вручную (Ctrl+C).</p>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty">
+    <h2>Пока ни одной камеры</h2>
+    <p>Добавьте камеры по адресу или вставьте их ID вручную.</p>
+    <a class="btn primary" href="{{ base_path }}/settings">Перейти в настройки</a>
+  </div>
+  {% endif %}
+
+  <p class="footer-note">Ссылки ведут на собственные прокси-роуты сервиса · <a href="{{ base_path }}/api/streams">сырой JSON</a></p>
+</main>
+{% endblock %}
