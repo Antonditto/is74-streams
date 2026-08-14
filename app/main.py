@@ -22,10 +22,20 @@ _APP_DIR = Path(__file__).parent
 
 
 class ProxyAwareMiddleware:
-    """Учитывает заголовки reverse-proxy (Traefik) и HA Ingress до роутинга, чтобы
-    request.base_url/root_path ниже по стеку уже отражали реальный публичный адрес,
-    а не внутренний host:port контейнера. Без этих заголовков (прямой доступ по
-    опубликованному порту) поведение не меняется.
+    """Учитывает заголовки reverse-proxy (Traefik) и HA Ingress до роутинга.
+
+    Ingress-префикс НЕ пишем в scope["root_path"] — это ломает роутинг вложенных
+    Mount'ов (у нас — /static, StaticFiles): Starlette 0.46 ожидает, что root_path
+    является буквальным префиксом scope["path"] (WSGI-конвенция SCRIPT_NAME), и
+    Mount.matches() пересчитывает root_path для дочернего приложения, складывая
+    старый root_path с совпавшим куском пути. HA Supervisor уже срезает Ingress-
+    префикс до того, как запрос попал к нам — scope["path"] его не содержит, — и
+    этот пересчёт уводит StaticFiles на несуществующий относительный путь (404).
+    Прямые (не-Mount) роуты вроде /login это не задевает — поэтому HTML работал,
+    а /static/* — нет (баг, найденный и пофикшенный после реального теста на HA).
+
+    Вместо этого префикс кладём в свой ключ scope["is74_prefix"] — им пользуются
+    _ctx/_redirect/_public_base_url, а Starlette-роутинг его не видит и не трогает.
 
     Доверяем заголовкам безусловно, без allow-list доверенных прокси — сервис живёт
     за собственным Traefik в приватном homelab, не публичный multi-tenant edge
@@ -46,7 +56,7 @@ class ProxyAwareMiddleware:
         # до аддона, но ссылки, которые мы генерируем сами, должны его учитывать.
         ingress_path = headers.get(b"x-ingress-path")
         if ingress_path:
-            scope["root_path"] = ingress_path.decode("latin-1")
+            scope["is74_prefix"] = ingress_path.decode("latin-1")
 
         # Traefik сам подставляет эти заголовки на обычном роутинге, без доп. конфигурации.
         proto = headers.get(b"x-forwarded-proto")
@@ -67,18 +77,36 @@ app.mount("/static", StaticFiles(directory=str(_APP_DIR / "static")), name="stat
 templates = Jinja2Templates(directory=str(_APP_DIR / "templates"))
 
 
+def _prefix(request: Request) -> str:
+    """Ingress-префикс (см. ProxyAwareMiddleware), обычно "" вне Ingress."""
+    return request.scope.get("is74_prefix", "")
+
+
 def _ctx(request: Request, **extra) -> dict:
     """Контекст для TemplateResponse: base_path — префикс для root-relative ссылок
-    в шаблонах (см. ProxyAwareMiddleware, обычно "" вне Ingress)."""
-    return {"base_path": request.scope.get("root_path", ""), **extra}
+    в шаблонах."""
+    return {"base_path": _prefix(request), **extra}
 
 
 def _redirect(request: Request, path: str, status_code: int = 307) -> RedirectResponse:
-    """RedirectResponse с учётом root_path — иначе под HA Ingress Location уходит мимо
-    префикса /api/hassio_ingress/<token>/ и браузер попадает не в аддон, а куда-то в HA
-    (см. ProxyAwareMiddleware)."""
-    base_path = request.scope.get("root_path", "")
-    return RedirectResponse(f"{base_path}{path}", status_code=status_code)
+    """RedirectResponse с учётом Ingress-префикса — иначе под HA Ingress Location
+    уходит мимо /api/hassio_ingress/<token>/ и браузер попадает не в аддон, а куда-то
+    в HA (см. ProxyAwareMiddleware)."""
+    return RedirectResponse(f"{_prefix(request)}{path}", status_code=status_code)
+
+
+def _public_base_url(request: Request) -> str:
+    """Абсолютный base_url (scheme://host/) + Ingress-префикс, для ссылок на потоки.
+
+    Не использует request.base_url напрямую, потому что тот учитывает
+    scope["root_path"] — тот самый ключ, который мы сознательно не трогаем (см.
+    ProxyAwareMiddleware). scope["root_path"] у нас всегда "", поэтому
+    str(request.base_url) — это чистый scheme://host/ (уже с поправкой на
+    X-Forwarded-Proto/Host), к которому здесь вручную добавляется наш префикс.
+    """
+    base = str(request.base_url).rstrip("/")
+    prefix = _prefix(request)
+    return f"{base}{prefix}/"
 
 
 def _internal_base_url(request: Request) -> str:
@@ -92,7 +120,7 @@ def _internal_base_url(request: Request) -> str:
     override = os.environ.get("IS74_INTERNAL_BASE_URL", "").strip()
     if override:
         return override if override.endswith("/") else override + "/"
-    return str(request.base_url)
+    return _public_base_url(request)
 
 
 def _describe_error(exc: Exception) -> str:
@@ -201,7 +229,7 @@ async def settings_form(request: Request):
     cameras: list[dict] = []
     if camera_ids:
         try:
-            cameras = await _fetch_streams(str(request.base_url))
+            cameras = await _fetch_streams(_public_base_url(request))
         except Exception as exc:
             # Не блокируем страницу настроек — ручное редактирование списка всё ещё должно
             # работать, даже если превью подтянуть не удалось (сеть недоступна и т.п.).
@@ -314,7 +342,7 @@ async def camera_preview_api(ids: str, request: Request):
 
     try:
         cameras = await is74_client.limited_info(parsed_ids, token)
-        streams = is74_client.build_stream_list(cameras, str(request.base_url), order=parsed_ids)
+        streams = is74_client.build_stream_list(cameras, _public_base_url(request), order=parsed_ids)
         snapshots = await asyncio.gather(
             *(_fetch_snapshot_with_retry(s["uuid"], token) for s in streams),
             return_exceptions=True,
@@ -351,7 +379,7 @@ async def streams_page(request: Request):
         return _redirect(request, "/settings")
 
     try:
-        streams = await _fetch_streams(str(request.base_url))
+        streams = await _fetch_streams(_public_base_url(request))
         error = None
     except Exception as exc:
         streams, error = [], str(exc)
@@ -394,7 +422,7 @@ async def media_master(camera_id: int, uuid: str, request: Request):
         )
     except Exception as exc:
         return PlainTextResponse(_describe_error(exc), status_code=502)
-    variant_url = f"{request.base_url}media/{camera_id}/ts.m3u8?uuid={uuid}&quality=main"
+    variant_url = f"{_public_base_url(request)}media/{camera_id}/ts.m3u8?uuid={uuid}&quality=main"
     return PlainTextResponse(
         is74_client.rewrite_master_playlist(body, variant_url),
         media_type="application/vnd.apple.mpegurl",
